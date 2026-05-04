@@ -1,0 +1,49 @@
+services:
+  server:
+    build: .
+    ports:
+      - "9999:9999"
+    depends_on:
+      - mongo
+    networks:
+      - chat-net
+    volumes:
+      - ./logs:/app/logs
+
+  mongo:
+    image: mongo:latest
+    networks:
+      - chat-net
+    volumes:
+      - chat-data:/data/db
+    ports:
+      - "27017:27017"
+
+  mongo-express:
+    image: mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo
+    depends_on:
+      - mongo
+    networks:
+      - chat-net
+
+  # הלקוח החדש שלנו
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    stdin_open: true # מאפשר לנו להקליד לקונטיינר
+    tty: true        # מדמה טרמינל אמיתי
+    depends_on:
+      - server
+    networks:
+      - chat-net
+
+networks:
+  chat-net:
+    driver: bridge
+volumes:
+  chat-data:
