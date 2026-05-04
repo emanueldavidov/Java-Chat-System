@@ -5,7 +5,8 @@ on:
     branches: [ "main" ]  # הרובוט ירוץ בכל פעם שתעשה Push לענף הראשי
   pull_request:
     branches: [ "main" ]
-
+  workflow_dispatch:  # מאפשר להריץ את ה-Workflow ידנית מה-GitHub UI
+  
 jobs:
   build-and-test:
     runs-on: ubuntu-latest  # המכונה שעליה הכל ירוץ
