@@ -3,6 +3,10 @@ import java.io.*;
 import java.net.Socket;
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Integration tests for the TCP Chat Server.
+ * These tests verify the full flow: connection, authentication, and messaging.
+ */
 public class ChatIntegrationTest {
 
     private static Thread serverThread;
@@ -12,20 +16,22 @@ public class ChatIntegrationTest {
 
     @BeforeAll
     static void startServer() {
-        // מריצים את השרת בטרד נפרד לפני כל הבדיקות
+        // Run the server in a separate background thread before all tests start
         serverThread = new Thread(() -> {
             Server server = new Server();
             server.run();
         });
         serverThread.start();
         
-        // נותנים לשרת שנייה לעלות
-        try { Thread.sleep(1000); } catch (InterruptedException e) {}
+        // Give the server a second to initialize and bind to the port
+        try { Thread.sleep(1000); } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @BeforeEach
     void connect() throws IOException {
-        // מתחברים לשרת המקומי לפני כל בדיקה בודדת
+        // Connect to the local server before every single test case
         testClient = new Socket("localhost", 9999);
         out = new PrintWriter(testClient.getOutputStream(), true);
         in = new BufferedReader(new InputStreamReader(testClient.getInputStream()));
@@ -33,7 +39,10 @@ public class ChatIntegrationTest {
 
     @AfterEach
     void disconnect() throws IOException {
-        testClient.close();
+        // Clean up the connection after each test
+        if (testClient != null && !testClient.isClosed()) {
+            testClient.close();
+        }
     }
 
     @Test
@@ -46,11 +55,11 @@ public class ChatIntegrationTest {
     @Test
     @DisplayName("Should fail registration with short password")
     void testShortPasswordRegistration() throws IOException {
-        in.readLine(); // קריאת ה-Welcome
-        out.println("test_user_" + System.currentTimeMillis()); // ניקניימ ייחודי
+        in.readLine(); // Read initial Welcome message
+        out.println("test_user_" + System.currentTimeMillis()); // Use unique nickname
         
-        in.readLine(); // קריאת ה-"Nickname not found..."
-        out.println("123"); // סיסמה קצרה מדי
+        in.readLine(); // Read "Nickname not found..." prompt
+        out.println("123"); // Send a password that is too short
         
         String response = in.readLine();
         assertEquals("Password too short! Try again.", response);
@@ -62,38 +71,39 @@ public class ChatIntegrationTest {
         String user = "user_" + System.currentTimeMillis();
         String pass = "password123";
 
-        // 1. רישום
+        // Step 1: Registration Flow
         in.readLine(); // Welcome
         out.println(user);
         in.readLine(); // Nickname not found...
         out.println(pass);
         in.readLine(); // Registration successful
-        testClient.close(); // מתנתקים
+        testClient.close(); // Disconnect to simulate a new session
 
-        // 2. ניסיון לוגין מחדש
-        connect(); // התחברות חדשה (קריאה למתודה מה-BeforeEach)
+        // Step 2: Login Flow (re-connecting)
+        connect(); 
         in.readLine(); // Welcome
         out.println(user);
         in.readLine(); // Enter password for...
         out.println(pass);
         
         String response = in.readLine();
+        // The server sends a join broadcast upon successful login
         assertTrue(response.contains("joined the chat"));
     }
     
     @Test
     @DisplayName("Private message should only be seen by target user")
     void testPrivateMessage() throws IOException, InterruptedException {
-        // 1. שימוש בשמות ייחודיים לכל הרצה כדי למנוע התנגשויות במונגו
+        // 1. Generate unique names to avoid MongoDB unique constraint collisions
         String sender = "s_" + System.currentTimeMillis();
         String receiver = "r_" + System.currentTimeMillis();
 
-        // התחברות שולח (A)
+        // Connect Sender (User A)
         in.readLine(); out.println(sender); 
         in.readLine(); out.println("pass"); 
         in.readLine(); // Registration successful
 
-        // התחברות מקבל (B)
+        // Connect Receiver (User B) manually
         Socket clientB = new Socket("localhost", 9999);
         PrintWriter outB = new PrintWriter(clientB.getOutputStream(), true);
         BufferedReader inB = new BufferedReader(new InputStreamReader(clientB.getInputStream()));
@@ -102,24 +112,24 @@ public class ChatIntegrationTest {
         inB.readLine(); outB.println("pass"); 
         inB.readLine(); // Registration successful
 
-        // המתנה קצרה כדי לוודא ששניהם רשומים ב-Map של השרת
+        // Small delay to ensure both users are registered in the server's connection map
         Thread.sleep(200);
 
-        // 2. שליחת הודעה פרטית
+        // 2. Send private message from User A to User B
         String secretMessage = "Hello Receiver " + System.currentTimeMillis();
         out.println("/msg " + receiver + " " + secretMessage);
 
-        // 3. לוגיקה חכמה לקריאת ההודעה: מחפשים את ההודעה הסודית בתוך כל ה"רעש"
+        // 3. Polling logic to find the private message in User B's stream
         boolean found = false;
-        for (int i = 0; i < 20; i++) { // בודקים עד 20 שורות נכנסות
-            if (inB.ready()) { // בודק אם יש מידע שמחכה בבאפר
+        for (int i = 0; i < 20; i++) { // Check up to 20 incoming lines
+            if (inB.ready()) { // Check if data is waiting in the buffer
                 String line = inB.readLine();
                 if (line.contains(secretMessage) && line.contains("[Private from " + sender + "]")) {
                     found = true;
                     break;
                 }
             } else {
-                Thread.sleep(100); // מחכים רגע אם הבאפר ריק
+                Thread.sleep(100); // Wait briefly if buffer is empty
             }
         }
 

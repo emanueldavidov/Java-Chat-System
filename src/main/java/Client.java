@@ -11,23 +11,27 @@ public class Client implements Runnable {
     @Override
     public void run() {
         try {
-        	String serverHost = System.getenv("SERVER_HOST");
-        	if (serverHost == null) serverHost = "localhost";
+            // Fetch the Server IP/Host from environment variables (defaults to localhost)
+            String serverHost = System.getenv("SERVER_HOST");
+            if (serverHost == null) serverHost = "localhost";
 
-        	client = new Socket(serverHost, 9999);
+            // Establish connection to the server on port 9999
+            client = new Socket(serverHost, 9999);
             out = new PrintWriter(client.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(client.getInputStream()));
 
-            // ת'רד לקריאת הודעות מהשרת
+            // Start a background thread to listen for incoming messages from the server
             Thread inputThread = new Thread(new InputHandler());
             inputThread.start();
 
-            // קריאת קלט מהמשתמש ושליחה לשרת
+            // Handle user input from the console and send it to the server
             Scanner scanner = new Scanner(System.in);
             while (!done) {
                 if (scanner.hasNextLine()) {
                     String message = scanner.nextLine();
                     out.println(message);
+                    
+                    // Check if the user wants to terminate the connection
                     if (message.equals("/quit")) {
                         done = true;
                         shutdown();
@@ -35,29 +39,43 @@ public class Client implements Runnable {
                 }
             }
         } catch (IOException e) {
+            // Handle connection issues or forced closures
             shutdown();
         }
     }
 
+    /**
+     * Gracefully closes all resources and stops the client process.
+     */
     public void shutdown() {
         done = true;
         try {
             if (in != null) in.close();
             if (out != null) out.close();
-            if (client != null && !client.isClosed()) client.close();
-        } catch (IOException e) { }
+            if (client != null && !client.isClosed()) {
+                client.close();
+            }
+        } catch (IOException e) {
+            // Ignore closure exceptions
+        }
     }
 
-    // מחלקה פנימית לטיפול בהודעות נכנסות מהשרת
+    /**
+     * Inner class responsible for listening to the server's output stream.
+     * Runs on a separate thread to ensure the client can receive messages 
+     * while simultaneously waiting for user input.
+     */
     class InputHandler implements Runnable {
         @Override
         public void run() {
             try {
                 String message;
+                // Continuously read messages until the connection is lost or closed
                 while ((message = in.readLine()) != null) {
                     System.out.println(message);
                 }
             } catch (IOException e) {
+                // Connection lost or closed by the server
                 shutdown();
             }
         }

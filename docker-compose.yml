@@ -2,13 +2,16 @@ services:
   server:
     build: .
     ports:
-      - "9999:9999"
+      - "9999:9999" # Chat communication port
+      - "8080:8080" # Prometheus metrics endpoint
     depends_on:
       - mongo
     networks:
       - chat-net
     volumes:
       - ./logs:/app/logs
+    environment:
+      - DB_HOST=mongo # Points to the mongo service name
 
   mongo:
     image: mongo:latest
@@ -22,7 +25,7 @@ services:
   mongo-express:
     image: mongo-express
     ports:
-      - "8081:8081"
+      - "8081:8081" # Web UI for MongoDB
     environment:
       - ME_CONFIG_MONGODB_SERVER=mongo
     depends_on:
@@ -30,20 +33,41 @@ services:
     networks:
       - chat-net
 
-  # הלקוח החדש שלנו
+  # Interactive Client Service
   client:
     build:
       context: .
       dockerfile: Dockerfile.client
-    stdin_open: true # מאפשר לנו להקליד לקונטיינר
-    tty: true        # מדמה טרמינל אמיתי
+    stdin_open: true # Allows interaction with the container (standard input stays open)
+    tty: true        # Allocates a pseudo-TTY (simulates a real terminal)
     depends_on:
       - server
+    networks:
+      - chat-net
+    environment:
+      - SERVER_HOST=server # Points to the server service name
+      
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - chat-net
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus  
     networks:
       - chat-net
 
 networks:
   chat-net:
     driver: bridge
+
 volumes:
-  chat-data:
+  chat-data: # Persistent storage for MongoDB

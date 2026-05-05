@@ -5,12 +5,12 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
-import java.util.Date; // בשביל תאריך ההודעה
+import java.util.Date; // Used for message timestamps
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-// אימפורטים של MongoDB
+// MongoDB Imports
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -21,6 +21,15 @@ import org.mindrot.jbcrypt.BCrypt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// Metrics and Monitoring Imports (Prometheus/Micrometer)
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import com.sun.net.httpserver.HttpServer;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+
 public class Server implements Runnable {
 
     private Map<String, ConnectionHandler> connections;
@@ -28,33 +37,63 @@ public class Server implements Runnable {
     private boolean done;
     private ExecutorService pool;
     private static final Logger logger = LoggerFactory.getLogger(Server.class);
-
-    // אובייקטים לניהול מסד הנתונים
+    
+    // Metrics configuration
+    private static final PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+    private static final Counter messagesCounter = Counter.builder("chat_messages_total")
+            .description("Total messages sent in chat")
+            .register(registry);
+    
     private MongoClient mongoClient;
     private MongoDatabase database;
     private MongoCollection<Document> messageCollection;
     private MongoCollection<Document> userCollection;
-    
 
     public Server() {
         connections = new ConcurrentHashMap<>();
+        // Registering a Gauge to monitor online users in real-time
+        Gauge.builder("chat_users_online", connections, Map::size)
+        .description("Current users online")
+        .register(registry);
         done = false;
     }
 
     @Override
     public void run() {
         try {
-        	String dbHost = System.getenv("DB_HOST");
-        	if (dbHost == null) dbHost = "localhost";
+            // Retrieve DB Host from environment variables (useful for Docker/Production)
+            String dbHost = System.getenv("DB_HOST");
+            if (dbHost == null) dbHost = "localhost";
 
-        	mongoClient = MongoClients.create("mongodb://" + dbHost + ":27017");
+            // Initialize MongoDB connection
+            mongoClient = MongoClients.create("mongodb://" + dbHost + ":27017");
             database = mongoClient.getDatabase("chatDB");
             messageCollection = database.getCollection("messages");
             userCollection = database.getCollection("users");
             logger.info("Connected to MongoDB successfully!");
 
+            // Initialize Server Socket and Thread Pool
             server = new ServerSocket(9999);
             pool = Executors.newCachedThreadPool();
+            
+            // Setting up internal HTTP server to expose Prometheus metrics
+            try {
+                HttpServer metricsServer = HttpServer.create(new InetSocketAddress(8080), 0);
+                metricsServer.createContext("/metrics", httpExchange -> {
+                    String response = registry.scrape();
+                    httpExchange.getResponseHeaders().set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+                    httpExchange.sendResponseHeaders(200, response.getBytes().length);
+                    try (OutputStream os = httpExchange.getResponseBody()) {
+                        os.write(response.getBytes());
+                    }
+                });
+                new Thread(metricsServer::start).start();
+                logger.info("Metrics server started on port 8080");
+            } catch (IOException e) {
+                logger.error("Failed to start metrics server: " + e.getMessage());
+            }
+            
+            // Accept incoming client connections
             while (!done) {
                 Socket client = server.accept();
                 ConnectionHandler handler = new ConnectionHandler(client);
@@ -65,8 +104,11 @@ public class Server implements Runnable {
         }
     }
 
+    /**
+     * Persists chat messages to MongoDB asynchronously to avoid blocking the main thread.
+     */
     private void saveMessageToDB(String user, String message, String room) {
-        // אנחנו שולחים את משימת השמירה ל-Pool, הטרד הנוכחי משתחרר מיד!
+        // Task is delegated to the thread pool so the current thread can continue immediately
         pool.execute(() -> {
             try {
                 if (messageCollection != null) {
@@ -82,17 +124,23 @@ public class Server implements Runnable {
         });
     }
     
+    /**
+     * Broadcasts a message to all users currently in a specific room.
+     */
     public void broadcast(String message, String room) {
-        // אנחנו נועלים את הרשימה בזמן המעבר עליה
-        synchronized (connections) {
-            for (ConnectionHandler ch : connections.values()) {
-                if (ch != null && ch.currentRoom.equals(room)) {
-                    ch.sendMessage(message);
-                }
+        messagesCounter.increment(); 
+
+        // No explicit synchronization needed as 'connections' is a ConcurrentHashMap
+        for (ConnectionHandler ch : connections.values()) {
+            if (ch != null && ch.currentRoom.equals(room)) {
+                ch.sendMessage(message);
             }
         }
     }
 
+    /**
+     * Gracefully shuts down the server and cleans up resources.
+     */
     public void shutdown() {
         try {
             done = true;
@@ -102,15 +150,18 @@ public class Server implements Runnable {
                 server.close();
             }
             if (connections != null) {
-            	for (ConnectionHandler ch : connections.values()) {
-            		ch.shutdown();
-            	}            	
+                for (ConnectionHandler ch : connections.values()) {
+                    ch.shutdown();
+                }               
             }
         } catch (IOException e) {
-            // ignore
+            // Ignore closure errors
         }
     }
 
+    /**
+     * Inner class to handle individual client logic and communication.
+     */
     class ConnectionHandler implements Runnable {
         private Socket client;
         private BufferedReader in;
@@ -128,33 +179,34 @@ public class Server implements Runnable {
                 out = new PrintWriter(client.getOutputStream(), true);
                 in = new BufferedReader(new InputStreamReader(client.getInputStream()));
                 
+                // Authentication Loop: Handles both Login and Registration
                 while (true) {
                     out.println("Welcome! Enter Nickname to Login or Register: ");
                     nickname = in.readLine();
                     if (nickname == null) return;
-                    nickname = nickname.trim();
+                    nickname = nickname.strip();
 
-                    // מחפשים את המשתמש ב-DB
+                    // Check if user exists in MongoDB
                     Document existingUser = userCollection.find(new Document("username", nickname)).first();
 
                     if (existingUser != null) {
-                        // משתמש קיים -> תהליך Login
+                        // User exists -> Login Process
                         out.println("Enter password for " + nickname + ": ");
                         String password = in.readLine();
                         String hashed = existingUser.getString("password");
 
                         if (BCrypt.checkpw(password, hashed)) {
-                            // סיסמה נכונה - אבל האם הוא כבר מחובר כרגע?
+                            // Password matches -> Check for double login
                             if (isAlreadyLoggedIn(nickname)) {
                                 out.println("User is already logged in from another device!");
                                 continue;
                             }
-                            break; // הצלחה!
+                            break; // Authentication Successful
                         } else {
                             out.println("Wrong password! Try again.");
                         }
                     } else {
-                        // משתמש חדש -> תהליך Register
+                        // New user -> Registration Process
                         out.println("Nickname not found. Create a new password to register: ");
                         String newPassword = in.readLine();
                         if (newPassword != null && newPassword.length() >= 4) {
@@ -167,46 +219,51 @@ public class Server implements Runnable {
                         }
                     }
                 }
-                connections.put(nickname, this);
+
+                // Finalize connection setup
+                connections.put(nickname.toLowerCase(), this);
                 logger.info(nickname + " connected!");
                 broadcast(nickname + " joined the chat!", currentRoom);
 
-                // בונוס: שליחת 10 הודעות אחרונות מה-DB למשתמש החדש
+                // Asynchronously fetch and send chat history to the new user
                 pool.execute(() -> sendChatHistory());
                 
+                // Main Message Handling Loop
                 String message;
                 while ((message = in.readLine()) != null) {
-                	if (message.startsWith("/msg ")) {
-                	    // פורמט: /msg nickname message content
-                	    String[] split = message.split(" ", 3);
-                	    if (split.length >= 3) {
-                	        String targetNick = split[1];
-                	        String privateContent = split[2];
-                	        sendPrivateMessage(nickname, targetNick, privateContent);
-                	    } else {
-                	        sendMessage("[System] Usage: /msg <nickname> <message>");
-                	    }
-                	}
-                	else if (message.startsWith("/join ")) {
-                	    String[] split = message.split(" ", 2);
-                	    if (split.length == 2) {
-                	        String newRoom = split[1].trim();
-                	        
-                	        // מודיעים לחדר הישן שעזבנו
-                	        broadcast(nickname + " left the room.", currentRoom);
-                	        
-                	        // עוברים חדר
-                	        currentRoom = newRoom;
-                	        
-                	        // מודיעים לחדר החדש שהצטרפנו
-                	        broadcast(nickname + " joined the room: " + currentRoom, currentRoom);
-                	        sendMessage("[System] Switched to room: " + currentRoom);
-                	        
-                	        // (בונוס) טעינת היסטוריה ספציפית לחדר
-                	        pool.execute(() -> sendChatHistory());
-                	    }
-                	}
-                	else if (message.startsWith("/nick ")) {
+                    if (message.startsWith("/msg ")) {
+                        // Private message format: /msg <nickname> <content>
+                        String[] split = message.split(" ", 3);
+                        if (split.length >= 3) {
+                            String targetNick = split[1];
+                            String privateContent = split[2];
+                            sendPrivateMessage(nickname, targetNick, privateContent);
+                        } else {
+                            sendMessage("[System] Usage: /msg <nickname> <message>");
+                        }
+                    }
+                    else if (message.startsWith("/join ")) {
+                        // Room switching logic
+                        String[] split = message.split(" ", 2);
+                        if (split.length == 2) {
+                            String newRoom = split[1].trim();
+                            
+                            // Notify old room about departure
+                            broadcast(nickname + " left the room.", currentRoom);
+                            
+                            // Switch room
+                            currentRoom = newRoom;
+                            
+                            // Notify new room about arrival
+                            broadcast(nickname + " joined the room: " + currentRoom, currentRoom);
+                            sendMessage("[System] Switched to room: " + currentRoom);
+                            
+                            // Fetch history for the specific new room
+                            pool.execute(() -> sendChatHistory());
+                        }
+                    }
+                    else if (message.startsWith("/nick ")) {
+                        // Nickname change logic
                         String[] messageSplit = message.split(" ", 2);
                         if (messageSplit.length == 2) {
                             broadcast(nickname + " changed to " + messageSplit[1], currentRoom);
@@ -215,7 +272,7 @@ public class Server implements Runnable {
                     } else if (message.startsWith("/quit")) {
                         break;
                     } else {
-                        // הפצה לכולם ושמירה בבסיס הנתונים
+                        // Standard global broadcast and DB archival
                         broadcast(nickname + ": " + message, currentRoom);
                         saveMessageToDB(nickname, message, currentRoom);
                     }
@@ -227,11 +284,14 @@ public class Server implements Runnable {
             }
         }
 
-        // שליפת היסטוריה מה-MongoDB
+        /**
+         * Fetches the last 10 messages from the database for the current room.
+         */
         private void sendChatHistory() {
             try {
-            	Document filter = new Document("room", currentRoom);
-                out.println("--- Last 10 messages ---" + currentRoom + " ---");
+                Document filter = new Document("room", currentRoom);
+                out.println("--- Last 10 messages in " + currentRoom + " ---");
+                // Querying DB: Filter by room, sort by time descending, limit to 10
                 for (Document doc : messageCollection.find(filter).sort(Sorts.descending("timestamp")).limit(10)) {
                     out.println(doc.getString("user") + ": " + doc.getString("message"));
                 }
@@ -245,29 +305,34 @@ public class Server implements Runnable {
             out.println(message);
         }
         
-
+        /**
+         * Sends a message to a specific user.
+         */
         public void sendPrivateMessage(String senderNick, String targetNick, String message) {
-            ConnectionHandler target = connections.get(targetNick);
+            ConnectionHandler target = connections.get(targetNick.toLowerCase());
             if (target != null) {
                 target.sendMessage("[Private from " + senderNick + "]: " + message);
-                // נשלח אישור גם לשולח
-                connections.get(senderNick).sendMessage("[Private to " + targetNick + "]: " + message);
+                // Confirm sent message to the sender
+                this.sendMessage("[Private to " + targetNick + "]: " + message);
             } else {
-                connections.get(senderNick).sendMessage("[System] User " + targetNick + " not found.");
+                this.sendMessage("[System] User " + targetNick + " not found.");
             }
         }
         
+        /**
+         * Validates if a nickname is already active in the connections map.
+         */
         private boolean isAlreadyLoggedIn(String name) {
-        	ConnectionHandler existing = connections.get(name.toLowerCase());
-        	if (existing != null && existing != this)
-        		return true;
-        	return false;
+            ConnectionHandler existing = connections.get(name.toLowerCase());
+            return (existing != null && existing != this);
         }
 
+        /**
+         * Cleans up the connection when a user disconnects.
+         */
         private void handleDisconnect() {
-            // אנחנו מסירים מהמפה רק אם הניקניימ אינו נאל
             if (nickname != null) {
-                connections.remove(nickname);
+                connections.remove(nickname.toLowerCase());
                 broadcast(nickname + " left the chat!", currentRoom);
                 logger.info("User {} disconnected", nickname);
             }
@@ -278,8 +343,10 @@ public class Server implements Runnable {
             try {
                 if (in != null) in.close();
                 if (out != null) out.close();
-                if (!client.isClosed()) client.close();
-            } catch (IOException e) { }
+                if (client != null && !client.isClosed()) client.close();
+            } catch (IOException e) { 
+                // Ignore cleanup errors
+            }
         }
     }
 
