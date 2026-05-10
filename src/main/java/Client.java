@@ -25,16 +25,17 @@ public class Client implements Runnable {
             inputThread.start();
 
             // Handle user input from the console and send it to the server
-            Scanner scanner = new Scanner(System.in);
-            while (!done) {
-                if (scanner.hasNextLine()) {
-                    String message = scanner.nextLine();
-                    out.println(message);
-                    
-                    // Check if the user wants to terminate the connection
-                    if (message.equals("/quit")) {
-                        done = true;
-                        shutdown();
+            try (Scanner scanner = new Scanner(System.in)) {
+                while (!done) {
+                    if (scanner.hasNextLine()) {
+                        String message = scanner.nextLine();
+                        out.println(message);
+                        
+                        // Check if the user wants to terminate the connection
+                        if (message.equals("/quit")) {
+                            done = true;
+                            shutdown();
+                        }
                     }
                 }
             }

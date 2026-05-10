@@ -51,7 +51,7 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId> # Uber jar plugin
+                <artifactId>maven-shade-plugin</artifactId> <!-- Uber jar plugin -->
                 <version>3.5.0</version>
                 <executions>
                     <execution>
