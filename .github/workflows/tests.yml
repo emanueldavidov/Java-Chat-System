@@ -2,16 +2,15 @@ name: Java CI with MongoDB
 
 on:
   push:
-    branches: [ "main" ]  # הרובוט ירוץ בכל פעם שתעשה Push לענף הראשי
+    branches: [ "main" ]  # The workflow will run every time you push to the main branch
   pull_request:
     branches: [ "main" ]
-  workflow_dispatch:  # מאפשר להריץ את ה-Workflow ידנית מה-GitHub UI
-  
+
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest  # המכונה שעליה הכל ירוץ
+    runs-on: ubuntu-latest  # The runner environment for the job
 
-    # כאן אנחנו מגדירים ל-GitHub להרים MongoDB זמני לצורך הטסטים
+    # Defining a service container to run MongoDB for the tests
     services:
       mongodb:
         image: mongo:latest
@@ -20,7 +19,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4  # מוריד את הקוד שלך למכונה הווירטואלית
+      uses: actions/checkout@v4  # Clones your repository onto the virtual machine
 
     - name: Set up JDK 21
       uses: actions/setup-java@v4
@@ -30,6 +29,6 @@ jobs:
         cache: maven
 
     - name: Run Tests with Maven
-      run: mvn test  # הפקודה שמריצה את ה-JUnit שכתבנו
+      run: mvn test  # Command to execute the JUnit tests
       env:
-        DB_HOST: localhost  # אומר לשרת שהמונגו נמצא ב-localhost של המכונה הווירטואלית
+        DB_HOST: localhost  # Tells the application that MongoDB is running on the local host of the runner

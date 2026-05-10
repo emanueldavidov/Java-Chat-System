@@ -51,6 +51,7 @@ services:
     image: prom/prometheus:latest
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus_data:/prometheus
     ports:
       - "9090:9090"
     networks:
@@ -71,3 +72,4 @@ networks:
 
 volumes:
   chat-data: # Persistent storage for MongoDB
+  prometheus_data: # Persistent storage for Prometheus
