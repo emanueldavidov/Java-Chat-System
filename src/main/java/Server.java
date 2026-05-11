@@ -167,6 +167,7 @@ public class Server implements Runnable {
         private BufferedReader in;
         private PrintWriter out;
         private String nickname;
+        private String normalizedName; // For case-insensitive storage in connections map
         private String currentRoom = "General";
 
         public ConnectionHandler(Socket client) {
@@ -182,12 +183,13 @@ public class Server implements Runnable {
                 // Authentication Loop: Handles both Login and Registration
                 while (true) {
                     out.println("Welcome! Enter Nickname to Login or Register: ");
-                    nickname = in.readLine();
-                    if (nickname == null) return;
-                    nickname = nickname.strip();
+                    String inputName = in.readLine();
+                    if (inputName == null) return; // Client disconnected during authentication
+                    nickname = inputName.strip();
+                    normalizedName = nickname.toLowerCase();
 
                     // Check if user exists in MongoDB
-                    Document existingUser = userCollection.find(new Document("username", nickname)).first();
+                    Document existingUser = userCollection.find(new Document("username", normalizedName)).first();
 
                     if (existingUser != null) {
                         // User exists -> Login Process
@@ -197,7 +199,7 @@ public class Server implements Runnable {
 
                         if (BCrypt.checkpw(password, hashed)) {
                             // Password matches -> Check for double login
-                            if (isAlreadyLoggedIn(nickname)) {
+                            if (isAlreadyLoggedIn(normalizedName)) {
                                 out.println("User is already logged in from another device!");
                                 continue;
                             }
@@ -211,7 +213,7 @@ public class Server implements Runnable {
                         String newPassword = in.readLine();
                         if (newPassword != null && newPassword.length() >= 4) {
                             String hashed = BCrypt.hashpw(newPassword, BCrypt.gensalt());
-                            userCollection.insertOne(new Document("username", nickname).append("password", hashed));
+                            userCollection.insertOne(new Document("username", normalizedName).append("password", hashed));
                             out.println("Registration successful!");
                             break;
                         } else {
@@ -221,7 +223,7 @@ public class Server implements Runnable {
                 }
 
                 // Finalize connection setup
-                connections.put(nickname.toLowerCase(), this);
+                connections.put(normalizedName, this);
                 logger.info(nickname + " connected!");
                 broadcast(nickname + " joined the chat!", currentRoom);
 
@@ -331,8 +333,8 @@ public class Server implements Runnable {
          * Cleans up the connection when a user disconnects.
          */
         private void handleDisconnect() {
-            if (nickname != null) {
-                connections.remove(nickname.toLowerCase());
+            if (normalizedName != null) {
+                connections.remove(normalizedName);
                 broadcast(nickname + " left the chat!", currentRoom);
                 logger.info("User {} disconnected", nickname);
             }

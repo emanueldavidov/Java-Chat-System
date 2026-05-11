@@ -14,7 +14,7 @@ services:
       - DB_HOST=mongo # Points to the mongo service name
 
   mongo:
-    image: mongo:latest
+    image: mongo:4.4
     networks:
       - chat-net
     volumes:
