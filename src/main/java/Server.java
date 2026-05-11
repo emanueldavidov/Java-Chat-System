@@ -231,8 +231,9 @@ public class Server implements Runnable {
                 pool.execute(() -> sendChatHistory());
                 
                 // Main Message Handling Loop
-                String message;
-                while ((message = in.readLine()) != null) {
+                String rawInput;
+                while ((rawInput = in.readLine()) != null) {
+                    String message = sanitize(rawInput);
                     if (message.startsWith("/msg ")) {
                         // Private message format: /msg <nickname> <content>
                         String[] split = message.split(" ", 3);
@@ -349,6 +350,22 @@ public class Server implements Runnable {
             } catch (IOException e) { 
                 // Ignore cleanup errors
             }
+        }
+
+        /**
+         * Sanitizes user input by escaping special HTML characters.
+         * This prevents Cross-Site Scripting (XSS) attacks by ensuring 
+         * the browser treats the input as literal text rather than executable code.
+         */
+        private String sanitize(String input) {
+            if (input == null) return null;
+
+            // Replace special characters with their corresponding HTML entities
+            return input.replace("&", "&amp;")   // Must be first to avoid double-escaping
+                        .replace("<", "&lt;")    // Prevents opening HTML tags
+                        .replace(">", "&gt;")    // Prevents closing HTML tags
+                        .replace("\"", "&quot;") // Prevents breaking out of HTML attributes
+                        .replace("'", "&#x27;"); // Prevents breaking out of JavaScript strings
         }
     }
 
