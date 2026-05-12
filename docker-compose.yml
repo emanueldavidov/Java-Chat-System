@@ -5,7 +5,8 @@ services:
       - "9999:9999" # Chat communication port
       - "8080:8080" # Prometheus metrics endpoint
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy # Waits for MongoDB to be healthy before starting the server
     networks:
       - chat-net
     volumes:

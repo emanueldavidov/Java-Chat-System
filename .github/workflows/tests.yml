@@ -29,6 +29,7 @@ jobs:
         cache: maven
 
     - name: Run Tests with Maven
+      # run: mvn test -P ci  # Command to execute the JUnit tests with a specific profile (if needed)
       run: mvn test  # Command to execute the JUnit tests
       env:
         DB_HOST: localhost  # Tells the application that MongoDB is running on the local host of the runner
