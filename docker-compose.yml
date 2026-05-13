@@ -52,8 +52,8 @@ services:
     image: prom/prometheus:latest
     user: "root" # Run as root to ensure permissions for volume mounts
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./prometheus_data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml # 1. Bind Mount for the configuration file (allows for easy editing from the host)
+      - prometheus_data:/prometheus # 2. Named Volume for persistent data (keeps the Git repo clean and improves performance)
     ports:
       - "9090:9090"
     networks:
