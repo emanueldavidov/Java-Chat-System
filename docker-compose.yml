@@ -22,6 +22,17 @@ services:
       - chat-data:/data/db
     ports:
       - "27017:27017"
+    healthcheck:
+      # Command to verify MongoDB is ready to accept connections
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      # Time between health checks
+      interval: 10s
+      # Maximum time allowed for one check to complete
+      timeout: 5s
+      # Number of consecutive failures before the container is considered unhealthy
+      retries: 5
+      # Grace period to allow the database to initialize before starting checks
+      start_period: 5s
 
   mongo-express:
     image: mongo-express
