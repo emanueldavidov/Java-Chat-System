@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.*;
 import java.util.Scanner;
+import javax.net.ssl.SSLSocketFactory;
 
 public class Client implements Runnable {
     private Socket client;
@@ -11,12 +12,27 @@ public class Client implements Runnable {
     @Override
     public void run() {
         try {
+            // Configure SSL properties for secure communication
+            String truststorePath = System.getenv("SSL_TRUSTSTORE_PATH"); 
+            String truststorePass = System.getenv("SSL_TRUSTSTORE_PASSWORD");
+
+            if (truststorePath != null && truststorePass != null) {
+                System.setProperty("javax.net.ssl.trustStore", truststorePath);
+                System.setProperty("javax.net.ssl.trustStorePassword", truststorePass);
+            }
+
             // Fetch the Server IP/Host from environment variables (defaults to localhost)
             String serverHost = System.getenv("SERVER_HOST");
             if (serverHost == null) serverHost = "localhost";
 
             // Establish connection to the server on port 9999
-            client = new Socket(serverHost, 9999);
+            client = SSLSocketFactory.getDefault().createSocket(serverHost, 9999);
+            System.out.println("raw TCP Connection established. Starting TLS Handshake...");
+
+            // אילוץ של לחיצת היד המאובטחת באופן ידני
+            ((javax.net.ssl.SSLSocket) client).startHandshake();
+
+            System.out.println("✅ TLS Handshake completed successfully! Connection is secure.");
             out = new PrintWriter(client.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(client.getInputStream()));
 
@@ -40,7 +56,6 @@ public class Client implements Runnable {
                 }
             }
         } catch (IOException e) {
-            // Handle connection issues or forced closures
             shutdown();
         }
     }

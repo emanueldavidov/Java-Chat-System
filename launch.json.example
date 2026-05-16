@@ -1,0 +1,27 @@
+// Copy this file into a '.vscode' folder and rename it to 'launch.json'
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Run Server",
+            "request": "launch",
+            "mainClass": "Server",
+            "env": {
+                "SSL_KEYSTORE_PATH": "${workspaceRoot}/keystore.p12",
+                "SSL_KEYSTORE_PASSWORD": "YOUR_KEYSTORE_PASSWORD" 
+            }
+        },
+        {
+            "type": "java",
+            "name": "Run Client",
+            "request": "launch",
+            "mainClass": "Client",
+            "console": "integratedTerminal",
+            "env": {
+                "SSL_TRUSTSTORE_PATH": "${workspaceRoot}/keystore.p12",
+                "SSL_TRUSTSTORE_PASSWORD": "YOUR_KEYSTORE_PASSWORD"
+            }
+        }
+    ]
+}

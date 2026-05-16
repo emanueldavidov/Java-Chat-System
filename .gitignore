@@ -1,7 +1,7 @@
 # Compiled class file
 *.class
 
-# Log file
+# Log files
 *.log
 
 # BlueJ files
@@ -10,7 +10,7 @@
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
-# Package Files #
+# Package Files (Archived build outputs) #
 *.jar
 *.war
 *.nar
@@ -19,6 +19,37 @@
 *.tar.gz
 *.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+# Maven Build Directory (CRITICAL for Java projects)
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.next
+release.properties
+
+# IDE and Editor Files (IntelliJ, VS Code, Eclipse)
+.idea/
+*.iml
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Security & Secrets (CRITICAL: Do not push keystores or certificates to Git)
+*.p12
+*.jks
+*.pem
+*.key
+.env
+
+# Virtual machine crash logs
 hs_err_pid*
 replay_pid*
+
+# Operating System Files
+.DS_Store
+Thumbs.db

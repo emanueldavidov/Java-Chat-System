@@ -9,10 +9,13 @@ services:
         condition: service_healthy # Waits for MongoDB to be healthy before starting the server
     networks:
       - chat-net
-    volumes:
-      - ./logs:/app/logs
     environment:
       - DB_HOST=mongo # Points to the mongo service name
+      - SSL_KEYSTORE_PATH=/app/security/keystore.p12
+      - SSL_KEYSTORE_PASSWORD=${MY_SSL_PASSWORD} # Use environment variables for sensitive data
+    volumes:
+      - ./logs:/app/logs
+      - ./keystore.p12:/app/security/keystore.p12 # Mount the security directory containing keystore and truststore files
 
   mongo:
     image: mongo:4.4
@@ -28,11 +31,11 @@ services:
       # Time between health checks
       interval: 10s
       # Maximum time allowed for one check to complete
-      timeout: 5s
+      timeout: 2s
       # Number of consecutive failures before the container is considered unhealthy
       retries: 5
       # Grace period to allow the database to initialize before starting checks
-      start_period: 5s
+      start_period: 2s
 
   mongo-express:
     image: mongo-express
@@ -58,6 +61,10 @@ services:
       - chat-net
     environment:
       - SERVER_HOST=server # Points to the server service name
+      - SSL_TRUSTSTORE_PATH=/app/security/truststore.p12
+      - SSL_TRUSTSTORE_PASSWORD=${MY_SSL_PASSWORD} # Use environment variables for sensitive data
+    volumes:
+      - ./keystore.p12:/app/security/truststore.p12 # Mount the security directory containing keystore and truststore files
       
   prometheus:
     image: prom/prometheus:latest

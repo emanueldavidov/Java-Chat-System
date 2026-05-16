@@ -16,9 +16,18 @@ RUN mvn package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
+# Create a non-root user and group for better security
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser 
+
 # C. Copy only the final JAR file from the build stage.
 # This keeps the final image size small by excluding Maven and source files.
 COPY --from=build /app/target/tcp-chat-1.0-SNAPSHOT.jar app.jar
+
+# D. Create a non-root user to run the application for better security.
+RUN chown appuser:appgroup app.jar /app
+
+# Switch to the non-root user to run the application
+USER appuser
 
 # Expose the port the chat server listens on
 EXPOSE 9999

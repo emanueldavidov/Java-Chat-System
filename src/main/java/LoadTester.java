@@ -3,7 +3,7 @@ import java.net.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-
+import javax.net.ssl.SSLSocketFactory;
 /**
  * LoadTester: Simulates multiple concurrent clients to stress test the server.
  * Use this to verify how the server handles high traffic and to visualize metrics in Grafana.
@@ -46,7 +46,9 @@ public class LoadTester {
      * Simulates a single client session: connects, authenticates, sends messages, and stays alive.
      */
     private static void simulateClient(int id) {
-        try (Socket socket = new Socket(SERVER_IP, SERVER_PORT);
+        // Using SSL Socket Factory to create a secure connection to the server
+        SSLSocketFactory sslSocketFactory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+        try (Socket socket = sslSocketFactory.createSocket(SERVER_IP, SERVER_PORT);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 

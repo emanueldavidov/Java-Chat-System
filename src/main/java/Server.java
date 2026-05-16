@@ -9,7 +9,7 @@ import java.util.Date; // Used for message timestamps
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
+import javax.net.ssl.SSLServerSocketFactory;
 // MongoDB Imports
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
@@ -61,6 +61,15 @@ public class Server implements Runnable {
     @Override
     public void run() {
         try {
+            // Configure SSL properties for secure communication
+            String keystorePath = System.getenv("SSL_KEYSTORE_PATH");
+            String keystorePass = System.getenv("SSL_KEYSTORE_PASSWORD");
+
+            if (keystorePath != null && keystorePass != null) {
+                System.setProperty("javax.net.ssl.keyStore", keystorePath);
+                System.setProperty("javax.net.ssl.keyStorePassword", keystorePass);
+                logger.info("SSL Keystore configured successfully from env variables.");
+            }
             // Retrieve DB Host from environment variables (useful for Docker/Production)
             String dbHost = System.getenv("DB_HOST");
             if (dbHost == null) dbHost = "localhost";
@@ -73,7 +82,7 @@ public class Server implements Runnable {
             logger.info("Connected to MongoDB successfully!");
 
             // Initialize Server Socket and Thread Pool
-            server = new ServerSocket(9999);
+            server = SSLServerSocketFactory.getDefault().createServerSocket(9999);
             pool = Executors.newCachedThreadPool();
             
             // Setting up internal HTTP server to expose Prometheus metrics
@@ -100,6 +109,7 @@ public class Server implements Runnable {
                 pool.execute(handler);
             }
         } catch (Exception e) {
+            logger.error("Server crashed due to an exception: ", e);
             shutdown();
         }
     }
