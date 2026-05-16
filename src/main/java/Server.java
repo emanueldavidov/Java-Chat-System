@@ -91,7 +91,6 @@ public class Server implements Runnable {
                 server = SSLServerSocketFactory.getDefault().createServerSocket(9999);
                 logger.info("SSL Server Socket initialized on port 9999. Awaiting secure connections...");
             }
-            server = SSLServerSocketFactory.getDefault().createServerSocket(9999);
             pool = Executors.newCachedThreadPool();
             
             // Setting up internal HTTP server to expose Prometheus metrics

@@ -33,7 +33,6 @@ public class Client implements Runnable {
             else {
                 client = SSLSocketFactory.getDefault().createSocket(serverHost, 9999);
             }
-            client = SSLSocketFactory.getDefault().createSocket(serverHost, 9999);
             System.out.println("raw TCP Connection established. Starting TLS Handshake...");
 
             // אילוץ של לחיצת היד המאובטחת באופן ידני
