@@ -1,0 +1,46 @@
+name: DevSecOps Security Pipeline
+
+on:
+  push:
+    branches: [ "main" ]  # The workflow will run every time you push to the main branch
+  pull_request:
+    branches: [ "main" ]  # The workflow will run every time a pull request is opened against main
+
+jobs:
+  security_scans:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Critical for Gitleaks to scan the entire Git history
+
+      # Step 1: Secret Scanning
+      - name: Run Gitleaks (Secret Scanning)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 2: Static Application Security Testing (SAST) using Semgrep (Lightweight and fast configuration)
+      - name: Run Semgrep (SAST for Injections)
+        run: |
+          pip install semgrep
+          semgrep scan --config auto --error
+
+      # Step 3: Software Composition Analysis (SCA) using Snyk
+      - name: Run Snyk to check vulnerabilities in POM
+        uses: snyk/actions/maven@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      # Step 4: Container Security (Build Docker Image and scan it with Trivy)
+      - name: Build Docker Image
+        run: docker build -t chat-server:latest .
+
+      - name: Run Trivy (Container Scanning)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'chat-server:latest'
+          format: 'table'
+          exit-code: '1' # Will fail the pipeline if CRITICAL or HIGH vulnerabilities are found
+          severity: 'CRITICAL,HIGH'
