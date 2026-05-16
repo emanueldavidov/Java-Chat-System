@@ -39,9 +39,14 @@ An enterprise-grade, high-concurrency TCP chat system built with Java 21, backed
 To run the server in its native secure mode, generate a self-signed PKCS12 cryptography certificate inside your root workspace directory:
 keytool -genkeypair -alias chatserver -keyalg RSA -keysize 2048 -storetype PKCS12 -keystore keystore.p12 -validity 365
 
-### 2. VS Code IDE Local Run Setup (.vscode/launch.json)
-Configure your target execution environment to pass the required cryptography properties into the compiled runtime application smoothly:
-Check launch.json.example
+### 2. Environment & IDE Template Setup
+The repository uses strict secret-management configurations. Before booting the application, you must prepare your local credentials using the provided example templates:
+* **Local Environment (.env)**: Copy the .env.example file, rename it to .env, and populate it with your actual backend secrets and database passwords:
+* cp .env.example .env
+* **VS Code Debugger (launch.json)**: Create a .vscode/ directory in the root folder. Copy launch.json.example into it, rename it to launch.json, and update the SSL_KEYSTORE_PASSWORD fields:
+* mkdir .vscode && cp launch.json.example .vscode/launch.json
+
+#### (Note: These files are explicitly guarded by .gitignore to prevent any credential leaks to GitHub).
 
 ## 🐳 Automated Deployment Orchestration
 To run the complete production-ready stack in a sandboxed, secure local network, use the provided compose orchestrator layout:
@@ -63,13 +68,13 @@ Fires automatically upon code updates to compile binaries, setup a localized iso
 ### 2. Shift-Left Security Assurance (security.yml)
 Enforces zero-tolerance blocking rules to break deployment code builds if any vulnerability metrics fail criteria thresholds:
 
-* Secret Scanning (Gitleaks): Analyzes version history branches to capture exposed database strings, AWS access vectors, or plain-text access tokens.
+* **Secret Scanning (Gitleaks)**: Analyzes version history branches to capture exposed database strings, AWS access vectors, or plain-text access tokens.
 
-* SAST Scanning (Semgrep): Validates abstract codebase syntax profiles to block raw query injections and catch data sanitization design flaws.**
+* **SAST Scanning (Semgrep)**: Validates abstract codebase syntax profiles to block raw query injections and catch data sanitization design flaws.
 
-* SCA Dependencies Scan (Snyk): Screens the target dependency ledger framework (pom.xml) against global defect indexes to stop supply-chain compromises.
+* **SCA Dependencies Scan (Snyk)**: Screens the target dependency ledger framework (pom.xml) against global defect indexes to stop supply-chain compromises.
 
-* Container Security (Trivy): Audits compiled base target layers and container binary configurations thoroughly before any release triggers.
+* **Container Security (Trivy)**: Audits compiled base target layers and container binary configurations thoroughly before any release triggers.
 
 ## 📈 Stress Testing & Concurrency Telemetry Verification
 To stress test the server and generate metric tracking vectors across visual graph modules:
