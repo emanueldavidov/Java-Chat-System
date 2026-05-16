@@ -17,7 +17,7 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # Create a non-root user and group for better security
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # C. Copy only the final JAR file from the build stage.
 # This keeps the final image size small by excluding Maven and source files.
