@@ -26,6 +26,13 @@ public class Client implements Runnable {
             if (serverHost == null) serverHost = "localhost";
 
             // Establish connection to the server on port 9999
+            String disableSSL = System.getProperty("DISABLE_SSL", System.getenv("DISABLE_SSL"));
+            if("true".equalsIgnoreCase(disableSSL)){
+                client = new Socket(serverHost, 9999);
+            }
+            else {
+                client = SSLSocketFactory.getDefault().createSocket(serverHost, 9999);
+            }
             client = SSLSocketFactory.getDefault().createSocket(serverHost, 9999);
             System.out.println("raw TCP Connection established. Starting TLS Handshake...");
 

@@ -82,6 +82,15 @@ public class Server implements Runnable {
             logger.info("Connected to MongoDB successfully!");
 
             // Initialize Server Socket and Thread Pool
+            String disableSSL = System.getProperty("DISABLE_SSL", System.getenv("DISABLE_SSL"));
+            if("true".equalsIgnoreCase(disableSSL)){
+                server = new ServerSocket(9999);
+                logger.warn("⚠️ SSL is DISABLED! Running in unencrypted mode. This is NOT recommended for production.");
+            }
+            else {
+                server = SSLServerSocketFactory.getDefault().createServerSocket(9999);
+                logger.info("SSL Server Socket initialized on port 9999. Awaiting secure connections...");
+            }
             server = SSLServerSocketFactory.getDefault().createServerSocket(9999);
             pool = Executors.newCachedThreadPool();
             
