@@ -1,12 +1,10 @@
 import org.junit.jupiter.api.*;
 import java.io.*;
 import java.net.Socket;
-import javax.net.ssl.SSLSocketFactory; // Import the secure socket factory
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Integration tests for the TCP Chat Server (Hardened with TLS/SSL).
+ * Integration tests for the TCP Chat Server.
  * These tests verify the full flow: connection, authentication, and messaging.
  */
 public class ChatIntegrationTest {
@@ -20,8 +18,8 @@ public class ChatIntegrationTest {
     static void startServer() {
         // Disable SSL for testing purposes to avoid handshake issues in the test environment
         System.setProperty("DISABLE_SSL", "true");
-
-        // Start the encrypted server inside a background thread
+        
+        // Run the server in a separate background thread before all tests start
         serverThread = new Thread(() -> {
             Server server = new Server();
             server.run();
@@ -36,8 +34,8 @@ public class ChatIntegrationTest {
 
     @BeforeEach
     void connect() throws IOException {
-        // Fix 1: Switch to a secure client connection using SSL
-        testClient = SSLSocketFactory.getDefault().createSocket("localhost", 9999);
+        // Connect to the local server before every single test case
+        testClient = new Socket("localhost", 9999);
         out = new PrintWriter(testClient.getOutputStream(), true);
         in = new BufferedReader(new InputStreamReader(testClient.getInputStream()));
     }
@@ -92,22 +90,24 @@ public class ChatIntegrationTest {
         out.println(pass);
         
         String response = in.readLine();
+        // The server sends a join broadcast upon successful login
         assertTrue(response.contains("joined the chat"));
     }
     
     @Test
     @DisplayName("Private message should only be seen by target user")
     void testPrivateMessage() throws IOException, InterruptedException {
+        // 1. Generate unique names to avoid MongoDB unique constraint collisions
         String sender = "s_" + System.currentTimeMillis();
         String receiver = "r_" + System.currentTimeMillis();
 
-        // Connect Sender (User A) - Uses the SSL connection initialized in @BeforeEach
+        // Connect Sender (User A)
         in.readLine(); out.println(sender); 
         in.readLine(); out.println("pass"); 
         in.readLine(); // Registration successful
 
-        // Fix 2: Create Client B (User B) securely using SSL
-        Socket clientB = SSLSocketFactory.getDefault().createSocket("localhost", 9999);
+        // Connect Receiver (User B) manually
+        Socket clientB = new Socket("localhost", 9999);
         PrintWriter outB = new PrintWriter(clientB.getOutputStream(), true);
         BufferedReader inB = new BufferedReader(new InputStreamReader(clientB.getInputStream()));
         
@@ -124,15 +124,15 @@ public class ChatIntegrationTest {
 
         // 3. Polling logic to find the private message in User B's stream
         boolean found = false;
-        for (int i = 0; i < 20; i++) { 
-            if (inB.ready()) { 
+        for (int i = 0; i < 20; i++) { // Check up to 20 incoming lines
+            if (inB.ready()) { // Check if data is waiting in the buffer
                 String line = inB.readLine();
                 if (line.contains(secretMessage) && line.contains("[Private from " + sender + "]")) {
                     found = true;
                     break;
                 }
             } else {
-                Thread.sleep(100); 
+                Thread.sleep(100); // Wait briefly if buffer is empty
             }
         }
 
