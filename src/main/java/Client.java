@@ -28,17 +28,12 @@ public class Client implements Runnable {
             // Establish connection to the server on port 9999
             String disableSSL = System.getProperty("DISABLE_SSL", System.getenv("DISABLE_SSL"));
             if("true".equalsIgnoreCase(disableSSL)){
-                client = new Socket(serverHost, 9999);
+                client = new Socket(serverHost, 9999); // nosemgrep: java.lang.security.audit.crypto.unencrypted-socket.unencrypted-socket
             }
             else {
                 client = SSLSocketFactory.getDefault().createSocket(serverHost, 9999);
             }
-            System.out.println("raw TCP Connection established. Starting TLS Handshake...");
 
-            // אילוץ של לחיצת היד המאובטחת באופן ידני
-            ((javax.net.ssl.SSLSocket) client).startHandshake();
-
-            System.out.println("✅ TLS Handshake completed successfully! Connection is secure.");
             out = new PrintWriter(client.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(client.getInputStream()));
 

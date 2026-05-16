@@ -84,7 +84,7 @@ public class Server implements Runnable {
             // Initialize Server Socket and Thread Pool
             String disableSSL = System.getProperty("DISABLE_SSL", System.getenv("DISABLE_SSL"));
             if("true".equalsIgnoreCase(disableSSL)){
-                server = new ServerSocket(9999);
+                server = new ServerSocket(9999); // nosemgrep: java.lang.security.audit.crypto.unencrypted-socket.unencrypted-socket
                 logger.warn("⚠️ SSL is DISABLED! Running in unencrypted mode. This is NOT recommended for production.");
             }
             else {
